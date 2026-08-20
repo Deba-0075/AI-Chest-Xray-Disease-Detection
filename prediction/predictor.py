@@ -12,7 +12,6 @@ from prediction.config import (
     DEVICE,
     CLASS_NAMES
 )
-
 from prediction.transforms import predict_transform
 
 
@@ -29,28 +28,21 @@ def predict(model, image_path):
         image = Image.open(image_path).convert("RGB")
 
     # Apply Transform
-    image = predict_transform(image)
+    tensor_image = predict_transform(image)
 
     # Add Batch Dimension
-    image = image.unsqueeze(0).to(DEVICE)
+    tensor_input = tensor_image.unsqueeze(0).to(DEVICE)
 
     # Prediction
     with torch.no_grad():
-
-        outputs = model(image)
-
+        outputs = model(tensor_input)
         probabilities = torch.softmax(outputs, dim=1)
-
-        confidence, predicted = torch.max(
-            probabilities,
-            dim=1
-        )
+        confidence, predicted = torch.max(probabilities, dim=1)
 
     return {
-
         "prediction": CLASS_NAMES[predicted.item()],
-
+        "class_index": predicted.item(),
         "confidence": confidence.item() * 100,
-
-        "probabilities": probabilities.squeeze().cpu().numpy()
+        "probabilities": probabilities.squeeze().cpu().numpy(),
+        "tensor_input": tensor_input
     }
