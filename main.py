@@ -26,10 +26,14 @@ app.add_middleware(
 
 MODELS: Dict[str, Any] = {}
 
-@app.on_event("startup")
-def startup_event():
+def get_models():
+    """Lazy-load models on the first request to allow instant server port binding."""
     global MODELS
-    MODELS = load_all_models()
+    if not MODELS:
+        print("🧠 Loading models into memory...")
+        MODELS = load_all_models()
+        print("✅ Models loaded successfully!")
+    return MODELS
 
 @app.get("/")
 def health_check():
@@ -53,8 +57,11 @@ async def diagnose(file: UploadFile = File(...)):
     except Exception:
         raise HTTPException(status_code=400, detail="Corrupted or unreadable image file.")
 
-    # Run fast forward-pass ensemble
-    result = ensemble_predict(MODELS, pil_image)
+    # Retrieve models (loads once on the first request)
+    models = get_models()
+
+    # Run forward-pass ensemble
+    result = ensemble_predict(models, pil_image)
 
     return {
         "final_diagnosis": {
