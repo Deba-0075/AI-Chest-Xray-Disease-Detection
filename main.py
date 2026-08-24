@@ -1,4 +1,5 @@
 import io
+import gc
 from typing import Dict, Any
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
@@ -57,48 +58,60 @@ async def diagnose(file: UploadFile = File(...)):
     except Exception:
         raise HTTPException(status_code=400, detail="Corrupted or unreadable image file.")
 
-    # Retrieve models (loads once on the first request)
-    models = get_models()
+    try:
+        # Retrieve models
+        models = get_models()
 
-    # Run forward-pass ensemble
-    result = ensemble_predict(models, pil_image)
+        # Run forward-pass ensemble
+        result = ensemble_predict(models, pil_image)
 
-    return {
-        "final_diagnosis": {
-            "prediction": result["final_prediction"],
-            "confidence": round(float(result["final_confidence"]), 2),
-            "agreement": result["agreement"]
-        },
-        "doctors": {
-            "doctor1": {
-                "name": "AI Doctor 1",
-                "model": "EfficientNet-B0",
-                "prediction": result["efficientnet"]["prediction"],
-                "confidence": round(float(result["efficientnet"]["confidence"]), 2),
-                "probabilities": {
-                    cls: round(float(prob) * 100, 2)
-                    for cls, prob in zip(CLASS_NAMES, result["efficientnet"]["probabilities"])
-                }
+        response_data = {
+            "final_diagnosis": {
+                "prediction": result["final_prediction"],
+                "confidence": round(float(result["final_confidence"]), 2),
+                "agreement": result["agreement"]
             },
-            "doctor2": {
-                "name": "AI Doctor 2",
-                "model": "DenseNet121",
-                "prediction": result["densenet"]["prediction"],
-                "confidence": round(float(result["densenet"]["confidence"]), 2),
-                "probabilities": {
-                    cls: round(float(prob) * 100, 2)
-                    for cls, prob in zip(CLASS_NAMES, result["densenet"]["probabilities"])
-                }
-            },
-            "doctor3": {
-                "name": "AI Doctor 3",
-                "model": "ResNet50",
-                "prediction": result["resnet"]["prediction"],
-                "confidence": round(float(result["resnet"]["confidence"]), 2),
-                "probabilities": {
-                    cls: round(float(prob) * 100, 2)
-                    for cls, prob in zip(CLASS_NAMES, result["resnet"]["probabilities"])
+            "doctors": {
+                "doctor1": {
+                    "name": "AI Doctor 1",
+                    "model": "EfficientNet-B0",
+                    "prediction": result["efficientnet"]["prediction"],
+                    "confidence": round(float(result["efficientnet"]["confidence"]), 2),
+                    "probabilities": {
+                        cls: round(float(prob) * 100, 2)
+                        for cls, prob in zip(CLASS_NAMES, result["efficientnet"]["probabilities"])
+                    }
+                },
+                "doctor2": {
+                    "name": "AI Doctor 2",
+                    "model": "DenseNet121",
+                    "prediction": result["densenet"]["prediction"],
+                    "confidence": round(float(result["densenet"]["confidence"]), 2),
+                    "probabilities": {
+                        cls: round(float(prob) * 100, 2)
+                        for cls, prob in zip(CLASS_NAMES, result["densenet"]["probabilities"])
+                    }
+                },
+                "doctor3": {
+                    "name": "AI Doctor 3",
+                    "model": "ResNet50",
+                    "prediction": result["resnet"]["prediction"],
+                    "confidence": round(float(result["resnet"]["confidence"]), 2),
+                    "probabilities": {
+                        cls: round(float(prob) * 100, 2)
+                        for cls, prob in zip(CLASS_NAMES, result["resnet"]["probabilities"])
+                    }
                 }
             }
         }
-    }
+        
+        # Explicitly release image memory
+        del pil_image
+        del image_bytes
+        gc.collect()
+
+        return response_data
+
+    except Exception as e:
+        gc.collect()
+        raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")

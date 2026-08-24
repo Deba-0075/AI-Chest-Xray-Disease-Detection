@@ -19,7 +19,11 @@ from prediction.config import (
 # ENSEMBLE PREDICTION
 # ==========================================
 
-def ensemble_predict(models, image_path):
+def ensemble_predict(models, image_input):
+    """
+    Runs forward-pass inference sequentially across 3 models,
+    releasing memory activations after each step to prevent OOM.
+    """
 
     # --------------------------------------
     # 1. Run Each Model Sequentially + Free RAM
@@ -27,19 +31,19 @@ def ensemble_predict(models, image_path):
 
     efficientnet_result = predict(
         models["efficientnet"],
-        image_path
+        image_input
     )
     gc.collect()
 
     densenet_result = predict(
         models["densenet"],
-        image_path
+        image_input
     )
     gc.collect()
 
     resnet_result = predict(
         models["resnet"],
-        image_path
+        image_input
     )
     gc.collect()
 
@@ -47,9 +51,9 @@ def ensemble_predict(models, image_path):
     # 2. Weighted Soft Voting
     # --------------------------------------
 
-    probs_eff = np.array(efficientnet_result["probabilities"])
-    probs_dense = np.array(densenet_result["probabilities"])
-    probs_res = np.array(resnet_result["probabilities"])
+    probs_eff = np.array(efficientnet_result["probabilities"], dtype=np.float32)
+    probs_dense = np.array(densenet_result["probabilities"], dtype=np.float32)
+    probs_res = np.array(resnet_result["probabilities"], dtype=np.float32)
 
     final_probabilities = (
         ENSEMBLE_WEIGHTS["efficientnet"] * probs_eff
@@ -60,6 +64,13 @@ def ensemble_predict(models, image_path):
     final_index = int(np.argmax(final_probabilities))
     final_prediction = CLASS_NAMES[final_index]
     final_confidence = float(final_probabilities[final_index] * 100)
+
+    # Convert to pure Python list before freeing arrays
+    final_probs_list = [float(p) for p in final_probabilities]
+
+    # Clean up NumPy buffers
+    del probs_eff, probs_dense, probs_res, final_probabilities
+    gc.collect()
 
     # --------------------------------------
     # 3. Model Agreement Consensus
@@ -83,6 +94,6 @@ def ensemble_predict(models, image_path):
         "resnet": resnet_result,
         "final_prediction": final_prediction,
         "final_confidence": round(final_confidence, 2),
-        "final_probabilities": final_probabilities.tolist(),
+        "final_probabilities": final_probs_list,
         "agreement": f"{agreement}/3"
     }
