@@ -1,11 +1,13 @@
 import io
 import gc
+from typing import Dict, Any
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 
 from prediction.config import DEVICE, CLASS_NAMES
+from prediction.model_loader import load_all_models
 from prediction.ensemble import ensemble_predict
 
 app = FastAPI(
@@ -22,6 +24,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+MODELS: Dict[str, Any] = {}
+
+@app.on_event("startup")
+def startup_event():
+    """Preloads models when FastAPI boots up."""
+    global MODELS
+    MODELS = load_all_models()
 
 @app.get("/")
 def health_check():
@@ -46,8 +56,8 @@ async def diagnose(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Corrupted or unreadable image file.")
 
     try:
-        # Run forward-pass sequential ensemble (models loaded & freed one by one)
-        result = ensemble_predict(None, pil_image)
+        # Run forward pass using preloaded models
+        result = ensemble_predict(MODELS, pil_image)
 
         response_data = {
             "final_diagnosis": {
@@ -89,9 +99,7 @@ async def diagnose(file: UploadFile = File(...)):
             }
         }
 
-        # Explicit cleanup
-        del pil_image
-        del image_bytes
+        del pil_image, image_bytes
         gc.collect()
 
         return response_data

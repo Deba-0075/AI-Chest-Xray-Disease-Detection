@@ -1,6 +1,6 @@
 """
 =========================================
-Model Loader (On-Demand Low RAM)
+Model Loader (Preload into RAM for AWS)
 AI-Based Chest X-ray Disease Detection
 =========================================
 """
@@ -17,47 +17,36 @@ from prediction.config import (
 )
 
 
-# ==========================================
-# LOAD SINGLE MODEL ON-DEMAND
-# ==========================================
-
-def load_single_model(model_name: str):
-    """
-    Instantiates and loads weights for one model at a time.
-    Keeps RAM overhead under 150MB by never holding all three models at once.
-    """
-    if model_name == "efficientnet":
-        model = timm.create_model(
-            "efficientnet_b0",
-            pretrained=False,
-            num_classes=NUM_CLASSES
-        )
-        model.load_state_dict(
-            torch.load(EFFICIENTNET_PATH, map_location=DEVICE)
-        )
-
-    elif model_name == "densenet":
-        model = timm.create_model(
-            "densenet121",
-            pretrained=False,
-            num_classes=NUM_CLASSES
-        )
-        model.load_state_dict(
-            torch.load(DENSENET_PATH, map_location=DEVICE)
-        )
-
-    elif model_name == "resnet":
-        model = timm.create_model(
-            "resnet50",
-            pretrained=False,
-            num_classes=NUM_CLASSES
-        )
-        model.load_state_dict(
-            torch.load(RESNET_PATH, map_location=DEVICE)
-        )
-    else:
-        raise ValueError(f"Unknown model name: {model_name}")
-
+def load_efficientnet():
+    model = timm.create_model("efficientnet_b0", pretrained=False, num_classes=NUM_CLASSES)
+    model.load_state_dict(torch.load(EFFICIENTNET_PATH, map_location=DEVICE))
     model.to(DEVICE)
     model.eval()
     return model
+
+
+def load_densenet():
+    model = timm.create_model("densenet121", pretrained=False, num_classes=NUM_CLASSES)
+    model.load_state_dict(torch.load(DENSENET_PATH, map_location=DEVICE))
+    model.to(DEVICE)
+    model.eval()
+    return model
+
+
+def load_resnet():
+    model = timm.create_model("resnet50", pretrained=False, num_classes=NUM_CLASSES)
+    model.load_state_dict(torch.load(RESNET_PATH, map_location=DEVICE))
+    model.to(DEVICE)
+    model.eval()
+    return model
+
+
+def load_all_models():
+    print("🧠 Loading models into RAM...")
+    models = {
+        "efficientnet": load_efficientnet(),
+        "densenet": load_densenet(),
+        "resnet": load_resnet()
+    }
+    print("✅ All 3 AI Doctor models loaded successfully!")
+    return models
