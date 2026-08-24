@@ -1,11 +1,13 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 fastapi
 uvicorn[standard]
 python-multipart
 
-torch==2.13.0
-torchvision==0.28.0
-timm==1.0.28
+torch
+torchvision
+timm
 
-numpy==2.2.6
-pillow==12.3.0
-pandas==2.3.3
+numpy
+pillow
+pandas
