@@ -6,13 +6,27 @@ AI-Based Chest X-ray Disease Detection
 """
 
 import gc
+import torch
 import numpy as np
 
 from prediction.predictor import predict
+from prediction.model_loader import load_single_model
 from prediction.config import (
     CLASS_NAMES,
     ENSEMBLE_WEIGHTS
 )
+
+
+def _predict_and_evict(model_name: str, image_input):
+    """Loads a single model into memory, runs inference, and deletes it immediately."""
+    model = load_single_model(model_name)
+    with torch.no_grad():
+        result = predict(model, image_input)
+    
+    # Explicitly drop reference and free RAM
+    del model
+    gc.collect()
+    return result
 
 
 # ==========================================
@@ -22,30 +36,16 @@ from prediction.config import (
 def ensemble_predict(models, image_input):
     """
     Runs forward-pass inference sequentially across 3 models,
-    releasing memory activations after each step to prevent OOM.
+    loading and evicting weights on-the-fly to stay under 512MB RAM.
     """
 
     # --------------------------------------
     # 1. Run Each Model Sequentially + Free RAM
     # --------------------------------------
 
-    efficientnet_result = predict(
-        models["efficientnet"],
-        image_input
-    )
-    gc.collect()
-
-    densenet_result = predict(
-        models["densenet"],
-        image_input
-    )
-    gc.collect()
-
-    resnet_result = predict(
-        models["resnet"],
-        image_input
-    )
-    gc.collect()
+    efficientnet_result = _predict_and_evict("efficientnet", image_input)
+    densenet_result = _predict_and_evict("densenet", image_input)
+    resnet_result = _predict_and_evict("resnet", image_input)
 
     # --------------------------------------
     # 2. Weighted Soft Voting

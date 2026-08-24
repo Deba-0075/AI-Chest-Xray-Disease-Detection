@@ -1,13 +1,11 @@
 import io
 import gc
-from typing import Dict, Any
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 
 from prediction.config import DEVICE, CLASS_NAMES
-from prediction.model_loader import load_all_models
 from prediction.ensemble import ensemble_predict
 
 app = FastAPI(
@@ -24,17 +22,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-MODELS: Dict[str, Any] = {}
-
-def get_models():
-    """Lazy-load models on the first request to allow instant server port binding."""
-    global MODELS
-    if not MODELS:
-        print("🧠 Loading models into memory...")
-        MODELS = load_all_models()
-        print("✅ Models loaded successfully!")
-    return MODELS
 
 @app.get("/")
 def health_check():
@@ -59,11 +46,8 @@ async def diagnose(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Corrupted or unreadable image file.")
 
     try:
-        # Retrieve models
-        models = get_models()
-
-        # Run forward-pass ensemble
-        result = ensemble_predict(models, pil_image)
+        # Run forward-pass sequential ensemble (models loaded & freed one by one)
+        result = ensemble_predict(None, pil_image)
 
         response_data = {
             "final_diagnosis": {
@@ -104,8 +88,8 @@ async def diagnose(file: UploadFile = File(...)):
                 }
             }
         }
-        
-        # Explicitly release image memory
+
+        # Explicit cleanup
         del pil_image
         del image_bytes
         gc.collect()
