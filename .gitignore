@@ -16,3 +16,6 @@ temp_image.png
 # OS
 .DS_Store
 Thumbs.db
+
+*.pem
+xray-key.pem
